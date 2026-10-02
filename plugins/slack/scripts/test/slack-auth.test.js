@@ -190,3 +190,19 @@ describe("runAuth", () => {
     );
   });
 });
+
+it("login --write を実際の引数解析経由で OAuth に渡す", async () => {
+  const { runAuth } = require("../slack-auth");
+  const { parseArgs } = require("../oauth-login");
+  for (const args of [["login"], ["login", "--write"], ["--write"]]) {
+    let received;
+    await runAuth(args, {
+      parseLoginArgs: (rest) => parseArgs(rest, {}, () => ({})),
+      oauthLogin: async (options) => {
+        received = options;
+        return { store: "test", team: "test", authedUserId: "U123", scope: "test" };
+      },
+    });
+    assert.equal(received.write, args.includes("--write"));
+  }
+});

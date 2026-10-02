@@ -37,10 +37,15 @@ const READONLY_SCOPES = [
   "usergroups:read",
 ];
 const OPTIONAL_SCOPES = ["chat:write"];
-const REQUESTED_SCOPES = [...READONLY_SCOPES, ...OPTIONAL_SCOPES];
+function requestedScopes(options = {}) {
+  return options.write === true
+    ? [...READONLY_SCOPES, ...OPTIONAL_SCOPES]
+    : [...READONLY_SCOPES];
+}
 const USAGE = [
-  "使い方: oauth-login.js [--config path] [--client-id <Slack Client ID>] [--redirect-uri URL]",
+  "使い方: oauth-login.js [--write] [--config path] [--client-id <Slack Client ID>] [--redirect-uri URL]",
   "",
+  "既定は読み取り専用です。--write 指定時だけ chat:write も要求します。",
   "既定では共有 Slack App の Client ID を使います。",
   `別 App を使う場合は ${DEFAULT_CONFIG_PATH} の client_id、SLACK_CLIENT_ID、または --client-id で上書きできます。`,
   "token 保存前に Slack workspace の team_id を allowed_team_ids と照合します。",
@@ -95,6 +100,7 @@ function parseArgs(args, env = process.env, configLoader = loadConfigFile) {
     clientId: "",
     redirectUri: "",
     help: false,
+    write: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -108,6 +114,8 @@ function parseArgs(args, env = process.env, configLoader = loadConfigFile) {
     } else if (arg === "--redirect-uri") {
       if (!args[i + 1]) throw new Error("--redirect-uri には URL を指定してください。");
       parsed.redirectUri = args[++i];
+    } else if (arg === "--write") {
+      parsed.write = true;
     } else if (arg === "--help" || arg === "-h") {
       parsed.help = true;
     } else {
@@ -158,6 +166,12 @@ function getMissingRequiredScopes(grantedScopes, requiredScopes = READONLY_SCOPE
 function validateGrantedScopes(tokenResponse, requiredScopes = READONLY_SCOPES) {
   const grantedScopes = extractGrantedScopes(tokenResponse);
   const missingScopes = getMissingRequiredScopes(grantedScopes, requiredScopes);
+  const unexpected = [...grantedScopes].filter((scope) => !requiredScopes.includes(scope));
+  if (unexpected.length) {
+    throw new Error(
+      `Slack token response に要求していない scope が含まれています: ${unexpected.join(", ")}。新しい token は保存していません。既存の保存済み token は変更されません。Slack 側の既存認可を取り消して再認証するか、別 App の --client-id を指定してください。slack-auth clear だけでは Slack 側の権限は取り消せません。`
+    );
+  }
   if (missingScopes.length === 0) return;
 
   if (grantedScopes.size === 0) {
@@ -175,7 +189,7 @@ function buildAuthorizeUrl(options, pkce, state) {
   url.searchParams.set("client_id", options.clientId);
   url.searchParams.set("redirect_uri", options.redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", REQUESTED_SCOPES.join(","));
+  url.searchParams.set("scope", requestedScopes(options).join(","));
   url.searchParams.set("code_challenge", pkce.challenge);
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("state", state);
@@ -216,7 +230,9 @@ async function waitForAuthorization(options) {
 
   process.stdout.write(
     [
-      "次の URL をブラウザで開いて Slack の読み取り権限と投稿権限を許可してください:",
+      options.write === true
+        ? "次の URL をブラウザで開いて Slack の読み取り権限と投稿権限を許可してください:"
+        : "次の URL をブラウザで開いて Slack の読み取り権限を許可してください:",
       authUrl.toString(),
       "",
     ].join("\n")
@@ -372,7 +388,7 @@ async function login(options) {
   validateOptions(options);
   const authorization = await waitForAuthorization(options);
   const tokenResponse = await exchangeCodeForToken(options, authorization);
-  validateGrantedScopes(tokenResponse);
+  validateGrantedScopes(tokenResponse, requestedScopes(options));
   const verification = await verifyTokenAuthorization(options, tokenResponse);
   const record = buildTokenRecord(options, tokenResponse, Date.now(), verification);
   await writeTokenRecord(record);
@@ -427,7 +443,7 @@ module.exports = {
   DEFAULT_CONFIG_PATH,
   READONLY_SCOPES,
   OPTIONAL_SCOPES,
-  REQUESTED_SCOPES,
+  requestedScopes,
   USAGE,
   loadConfigFile,
   applyDefaults,

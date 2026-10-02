@@ -28,6 +28,9 @@ node /a/b/scripts/slack-auth.js
 node /a/b/scripts/slack-auth.js login
 ```
 
+通常ログインで要求外の権限が返った場合は保存を拒否します。既存の保存済み token は残るため、読み取り専用への切り替え完了と説明しないでください。
+Slack 側の既存認可の取り消し、または別の読み取り専用 App での再認証が必要です。`clear` だけでは権限は取り消されません。
+
 状態確認:
 
 ```bash

@@ -10,7 +10,7 @@ const {
   DEFAULT_CONFIG_PATH,
   READONLY_SCOPES,
   OPTIONAL_SCOPES,
-  REQUESTED_SCOPES,
+  requestedScopes,
   normalizeTeamIds,
   applyDefaults,
   parseArgs,
@@ -36,6 +36,7 @@ describe("parseArgs", () => {
       redirectUri: DEFAULT_REDIRECT_URI,
       allowedTeamIds: DEFAULT_ALLOWED_TEAM_IDS,
       help: false,
+      write: false,
     });
   });
 
@@ -48,6 +49,7 @@ describe("parseArgs", () => {
       redirectUri: DEFAULT_REDIRECT_URI,
         allowedTeamIds: ["T123", "T456"],
       help: false,
+      write: false,
       }
     );
   });
@@ -99,6 +101,7 @@ describe("applyDefaults", () => {
         redirectUri: "http://localhost:53682/slack/oauth/callback",
         allowedTeamIds: ["TCLI"],
         help: false,
+        write: false,
       },
       {
         client_id: "config",
@@ -198,7 +201,7 @@ describe("PKCE", () => {
 });
 
 describe("buildAuthorizeUrl", () => {
-  it("Slack user OAuth PKCE URL で読み取り権限と投稿権限を要求する", () => {
+  it("Slack user OAuth PKCE URL は既定で読み取り権限のみを要求する", () => {
     const url = buildAuthorizeUrl(
       { clientId: "123.456", redirectUri: DEFAULT_REDIRECT_URI },
       { challenge: "challenge" },
@@ -210,8 +213,8 @@ describe("buildAuthorizeUrl", () => {
     assert.equal(url.searchParams.get("redirect_uri"), DEFAULT_REDIRECT_URI);
     assert.equal(url.searchParams.get("response_type"), "code");
     assert.deepEqual(OPTIONAL_SCOPES, ["chat:write"]);
-    assert.equal(url.searchParams.get("scope"), REQUESTED_SCOPES.join(","));
-    assert.match(url.searchParams.get("scope"), /(?:^|,)chat:write(?:,|$)/);
+    assert.equal(url.searchParams.get("scope"), READONLY_SCOPES.join(","));
+    assert.doesNotMatch(url.searchParams.get("scope"), /(?:^|,)chat:write(?:,|$)/);
     assert.equal(url.searchParams.get("code_challenge"), "challenge");
     assert.equal(url.searchParams.get("code_challenge_method"), "S256");
     assert.equal(url.searchParams.get("state"), "state");
@@ -474,5 +477,29 @@ describe("buildTokenRecord", () => {
     assert.equal(record.team_id, "T123");
     assert.equal(record.team_name, "Example");
     assert.equal(record.authed_user_id, "U123");
+  });
+});
+
+describe("explicit write opt-in", () => {
+  it("--write 指定時のみ認証 URL に chat:write を含める", () => {
+    for (const args of [[], ["--write"]]) {
+      const options = parseArgs(args, {}, () => ({}));
+      const url = buildAuthorizeUrl(options, { challenge: "test" }, "state");
+      const scopes = url.searchParams.get("scope").split(",");
+      assert.deepEqual(scopes, args.length ? [...READONLY_SCOPES, "chat:write"] : READONLY_SCOPES);
+      assert.doesNotThrow(() => validateGrantedScopes({ scope: scopes.join(",") }, requestedScopes(options)));
+    }
+  });
+
+  it("通常ログインで書き込み権限が残っていたら拒否する", () => {
+    assert.throws(() => validateGrantedScopes({ scope: [...READONLY_SCOPES, "chat:write"].join(",") }), /要求していない scope/);
+  });
+
+  it("write ログインでも無関係の追加権限は拒否する", () => {
+    assert.throws(() => validateGrantedScopes({ scope: [...READONLY_SCOPES, "chat:write", "files:write"].join(",") }, requestedScopes({ write: true })), /要求していない scope/);
+  });
+
+  it("--write の権限が付与されなければ成功扱いにしない", () => {
+    assert.throws(() => validateGrantedScopes({ scope: READONLY_SCOPES.join(",") }, requestedScopes({ write: true })), /scope が不足.*chat:write/);
   });
 });
