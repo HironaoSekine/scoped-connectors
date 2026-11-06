@@ -37,6 +37,7 @@ describe("parseArgs", () => {
       allowedTeamIds: DEFAULT_ALLOWED_TEAM_IDS,
       help: false,
       write: false,
+      reactions: false,
     });
   });
 
@@ -50,6 +51,7 @@ describe("parseArgs", () => {
         allowedTeamIds: ["T123", "T456"],
       help: false,
       write: false,
+      reactions: false,
       }
     );
   });
@@ -102,6 +104,7 @@ describe("applyDefaults", () => {
         allowedTeamIds: ["TCLI"],
         help: false,
         write: false,
+        reactions: false,
       },
       {
         client_id: "config",
@@ -502,4 +505,40 @@ describe("explicit write opt-in", () => {
   it("--write の権限が付与されなければ成功扱いにしない", () => {
     assert.throws(() => validateGrantedScopes({ scope: READONLY_SCOPES.join(",") }, requestedScopes({ write: true })), /scope が不足.*chat:write/);
   });
+});
+
+describe("explicit reactions opt-in", () => {
+  it("既定・投稿・リアクション・併用で要求する権限を分離する", () => {
+    const { REACTION_SCOPES } = require("../oauth-login");
+    assert.deepEqual(REACTION_SCOPES, ["reactions:read", "reactions:write"]);
+    for (const [args, extra] of [
+      [[], []], [["--write"], ["chat:write"]],
+      [["--reactions"], REACTION_SCOPES],
+      [["--write", "--reactions"], ["chat:write", ...REACTION_SCOPES]],
+    ]) {
+      const options = parseArgs(args, {}, () => ({}));
+      const url = buildAuthorizeUrl(options, { challenge: "test" }, "state");
+      assert.deepEqual(url.searchParams.get("scope").split(","), [...READONLY_SCOPES, ...extra]);
+      assert.doesNotThrow(() => validateGrantedScopes({ scope: url.searchParams.get("scope") }, requestedScopes(options)));
+    }
+  });
+
+  it("要求外のリアクション権限も、不足したリアクション権限も拒否する", () => {
+    const withReactions = requestedScopes({ reactions: true });
+    assert.throws(() => validateGrantedScopes({ scope: withReactions.join(",") }), /要求していない scope/);
+    assert.throws(() => validateGrantedScopes({ scope: [...withReactions, "groups:history"].join(",") }, withReactions), /要求していない scope/);
+    for (const missing of ["reactions:read", "reactions:write"]) {
+      assert.throws(() => validateGrantedScopes({ scope: withReactions.filter(s => s !== missing).join(",") }, withReactions), /scope が不足/);
+    }
+  });
+});
+
+it("manifest の任意リアクション権限は宣言済みで、通常ログインの要求には含まれない", () => {
+  const manifest = require("../../slack-app-manifest.json");
+  const scopes = manifest.oauth_config.scopes;
+  for (const scope of ["reactions:read", "reactions:write"]) {
+    assert.ok(scopes.user.includes(scope), `${scope} must be declared`);
+    assert.ok(scopes.user_optional.includes(scope), `${scope} must remain optional`);
+    assert.ok(!requestedScopes().includes(scope), `${scope} must require opt-in`);
+  }
 });

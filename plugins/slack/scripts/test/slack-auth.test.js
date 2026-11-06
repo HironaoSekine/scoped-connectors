@@ -206,3 +206,19 @@ it("login --write を実際の引数解析経由で OAuth に渡す", async () =
     assert.equal(received.write, args.includes("--write"));
   }
 });
+
+it("login --reactions は --write と独立して OAuth へ渡す", async () => {
+  const { parseArgs } = require("../oauth-login");
+  for (const args of [["login", "--reactions"], ["--reactions"], ["login", "--write", "--reactions"]]) {
+    let received;
+    await runAuth(args, {
+      parseLoginArgs: (rest) => parseArgs(rest, {}, () => ({})),
+      oauthLogin: async (options) => {
+        received = options;
+        return { store: "test", team: "test", authedUserId: "U123", scope: "test" };
+      },
+    });
+    assert.equal(received.reactions, true);
+    assert.equal(received.write, args.includes("--write"));
+  }
+});

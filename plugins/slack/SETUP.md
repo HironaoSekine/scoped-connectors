@@ -57,7 +57,7 @@ Keychain / Credential Manager を使う Slack 系コマンドは sandbox 外実�
 各 `SKILL.md` は `sandbox_permissions: "require_escalated"` と script ごとの `prefix_rule` を使うように記載しています。
 
 初回承認時に prefix rule を保存すると、同じ script の次回以降の実行で承認を省略しやすくなります。
-対象 script は `slack-auth.js`、`channels.js`、`users.js`、`history.js`、`thread.js`、`search.js` です。
+対象 script は `slack-auth.js`、`channels.js`、`users.js`、`history.js`、`thread.js`、`search.js`、`reactions.js` です。
 
 ## 参考: 実 Slack smoke
 
@@ -134,3 +134,22 @@ guest user（`users.info` の `is_restricted` / `is_ultra_restricted` が true �
 
 既存 App に scope を追加した場合、管理側で承認済みになった後も、必ず「Install App」ページから再インストールしてください。
 再インストールしないと、Slack API の `provided` scope に新しい権限が反映されないことがあります。
+
+## 参考: リアクション操作を有効にする
+
+1. Slack App の管理者が manifest の `oauth_config.scopes.user` に `reactions:read` と `reactions:write` を宣言し、同じ scope を `user_optional` にも追加して任意の権限にします。Slack の仕様上、任意 scope も `user` への宣言が必要です。通常ログインで要求する scope は増やしません。
+2. ワークスペースの承認が必要な場合は承認後、「Install App」から再インストールします。リポジトリへのマージだけでは実際の Slack App の設定は変わりません。
+3. 利用者が次のコマンドで再認証し、ブラウザの許可画面で権限を確認します。
+
+   ```sh
+   node plugins/slack/scripts/slack-auth.js login --reactions
+   node plugins/slack/scripts/slack-auth.js status
+   ```
+
+`status` の `scope` に `reactions:read` と `reactions:write` が含まれることを確認してください。
+既に投稿権限も使っている場合は `login --write --reactions` で、引き続き必要な権限を明示してください。
+通常の `login` / `login --write` ではリアクション権限を要求しません。
+要求していない権限が Slack 側の既存認可に残っていた場合は Token Record の保存を拒否し、既存の保存済み Token Record を維持します。
+読み取り専用へ戻すには Slack 側の認可を取り消して再認証するか、別 App を使ってください。`clear` は Slack 側の権限を取り消しません。
+
+権限は public / private / DM を区別しません。コネクタ側の制限とレビュー時の使い方は [README](README.md#権限と対象範囲) を参照してください。

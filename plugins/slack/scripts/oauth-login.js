@@ -37,15 +37,20 @@ const READONLY_SCOPES = [
   "usergroups:read",
 ];
 const OPTIONAL_SCOPES = ["chat:write"];
+const REACTION_SCOPES = ["reactions:read", "reactions:write"];
 function requestedScopes(options = {}) {
-  return options.write === true
-    ? [...READONLY_SCOPES, ...OPTIONAL_SCOPES]
-    : [...READONLY_SCOPES];
+  return [
+    ...READONLY_SCOPES,
+    ...(options.write === true ? OPTIONAL_SCOPES : []),
+    ...(options.reactions === true ? REACTION_SCOPES : []),
+  ];
 }
 const USAGE = [
-  "使い方: oauth-login.js [--write] [--config path] [--client-id <Slack Client ID>] [--redirect-uri URL]",
+  "使い方: oauth-login.js [--write] [--reactions] [--config path] [--client-id <Slack Client ID>] [--redirect-uri URL]",
   "",
   "既定は読み取り専用です。--write 指定時だけ chat:write も要求します。",
+  "--reactions 指定時だけ reactions:read / reactions:write も要求します。",
+  "リアクション権限は Slack 側では private / DM にも及びます。コネクタは public のみ扱います。",
   "既定では共有 Slack App の Client ID を使います。",
   `別 App を使う場合は ${DEFAULT_CONFIG_PATH} の client_id、SLACK_CLIENT_ID、または --client-id で上書きできます。`,
   "token 保存前に Slack workspace の team_id を allowed_team_ids と照合します。",
@@ -101,6 +106,7 @@ function parseArgs(args, env = process.env, configLoader = loadConfigFile) {
     redirectUri: "",
     help: false,
     write: false,
+    reactions: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -114,6 +120,8 @@ function parseArgs(args, env = process.env, configLoader = loadConfigFile) {
     } else if (arg === "--redirect-uri") {
       if (!args[i + 1]) throw new Error("--redirect-uri には URL を指定してください。");
       parsed.redirectUri = args[++i];
+    } else if (arg === "--reactions") {
+      parsed.reactions = true;
     } else if (arg === "--write") {
       parsed.write = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -230,9 +238,11 @@ async function waitForAuthorization(options) {
 
   process.stdout.write(
     [
-      options.write === true
-        ? "次の URL をブラウザで開いて Slack の読み取り権限と投稿権限を許可してください:"
-        : "次の URL をブラウザで開いて Slack の読み取り権限を許可してください:",
+      options.reactions === true
+        ? "次の URL をブラウザで開いて Slack の読み取り権限とリアクション操作権限を許可してください（--write 併用時は投稿権限も要求します）:"
+        : options.write === true
+          ? "次の URL をブラウザで開いて Slack の読み取り権限と投稿権限を許可してください:"
+          : "次の URL をブラウザで開いて Slack の読み取り権限を許可してください:",
       authUrl.toString(),
       "",
     ].join("\n")
@@ -443,6 +453,7 @@ module.exports = {
   DEFAULT_CONFIG_PATH,
   READONLY_SCOPES,
   OPTIONAL_SCOPES,
+  REACTION_SCOPES,
   requestedScopes,
   USAGE,
   loadConfigFile,

@@ -1,7 +1,7 @@
 {
   "display_information": {
     "name": "Scoped Connector",
-    "description": "AIエージェントから、範囲を限定してメッセージの読み取りと投稿を行うためのアプリ"
+    "description": "AIエージェントから、範囲を限定してメッセージの読み取り・投稿・リアクション操作を行うためのアプリ"
   },
   "oauth_config": {
     "redirect_urls": [
@@ -12,12 +12,16 @@
         "channels:history",
         "channels:read",
         "chat:write",
+        "reactions:read",
+        "reactions:write",
         "search:read.public",
         "users:read",
         "usergroups:read"
       ],
       "user_optional": [
-        "chat:write"
+        "chat:write",
+        "reactions:read",
+        "reactions:write"
       ]
     },
     "pkce_enabled": true

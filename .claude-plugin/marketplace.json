@@ -4,7 +4,7 @@
   "plugins": [
     {
       "name": "slack",
-      "description": "Slack からメッセージを取得する Claude Code プラグイン",
+      "description": "Slack のメッセージ取得・検索と任意のリアクション操作を行うプラグイン",
       "source": "./plugins/slack"
     },
     {

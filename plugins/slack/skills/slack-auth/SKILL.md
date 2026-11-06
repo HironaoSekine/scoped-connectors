@@ -8,7 +8,7 @@ allowed-tools:
 
 # slack-auth
 
-Slack OAuth PKCE で読み取り専用 user token を取得し、OS secure store の保存状態確認と削除も行います。
+Slack OAuth PKCE で user token（通常は読み取り専用）を取得し、OS secure store の保存状態確認と削除も行います。
 
 ## 手順
 
@@ -27,6 +27,10 @@ node /a/b/scripts/slack-auth.js
 ```bash
 node /a/b/scripts/slack-auth.js login
 ```
+
+リアクションの確認・追加・削除を利用者が希望する場合だけ、`login --reactions` で再認証します。
+この指定は `reactions:read` / `reactions:write` を要求します。Slack 側では private / DM にも及ぶ権限であることを説明し、ブラウザの許可画面は利用者に確認してもらってください。
+`--write` は独立したメッセージ投稿権限です。既存の投稿権限も引き続き必要な場合は `login --write --reactions` とします。
 
 通常ログインで要求外の権限が返った場合は保存を拒否します。既存の保存済み token は残るため、読み取り専用への切り替え完了と説明しないでください。
 Slack 側の既存認可の取り消し、または別の読み取り専用 App での再認証が必要です。`clear` だけでは権限は取り消されません。
